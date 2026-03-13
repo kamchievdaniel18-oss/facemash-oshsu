@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ky">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FACEMASH | OshSU Fresh</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
+    
+    <style>
+        :root { --main-red: #900; --gold: #ffd700; }
+        body { background: #111; color: white; font-family: 'Segoe UI', sans-serif; text-align: center; margin: 0; padding-bottom: 50px; }
+        
+        header { background: var(--main-red); padding: 25px; border-bottom: 4px solid white; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        h1 { margin: 0; font-size: clamp(30px, 8vw, 50px); font-weight: 900; letter-spacing: -2px; }
+        .author { color: var(--gold); font-size: 14px; margin-top: 5px; font-weight: bold; }
+
+        /* Админ баскычы */
+        .admin-btn { 
+            background: var(--gold); color: #000; border: none; padding: 12px 25px; 
+            font-weight: bold; border-radius: 8px; cursor: pointer; margin: 20px;
+            box-shadow: 0 4px 0 #b8860b; transition: 0.2s;
+        }
+        .admin-btn:active { transform: translateY(4px); box-shadow: none; }
+
+        /* Оюн талаасы */
+        .comparison { display: flex; justify-content: center; align-items: center; gap: 20px; margin: 20px auto; flex-wrap: wrap; padding: 10px; }
+        .vs-text { font-size: 30px; font-weight: 900; color: var(--main-red); text-shadow: 0 0 10px rgba(153,0,0,0.5); }
+        
+        /* Карточкалар */
+        .card { border: 3px solid #333; background: #222; cursor: pointer; border-radius: 15px; padding: 8px; transition: 0.3s; width: 100%; max-width: 280px; }
+        .card:hover { border-color: white; transform: scale(1.02); }
+        .card img { width: 100%; height: 380px; object-fit: cover; object-position: center 20%; border-radius: 10px; }
+        .card h3 { margin: 10px 0; font-size: 20px; text-transform: uppercase; }
+
+        /* Рейтинг бөлүмү */
+        #leaderboard { margin: 40px auto; max-width: 350px; background: #1a1a1a; padding: 20px; border-radius: 20px; border: 1px solid #333; text-align: left; }
+        #leaderboard h2 { text-align: center; color: var(--gold); margin-top: 0; }
+        ol { padding-left: 25px; }
+        li { margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 5px; font-size: 18px; }
+        li b { color: var(--gold); float: right; }
+
+        /* Админ панель */
+        .admin-panel { 
+            display: none; position: fixed; top: 50%; left: 50%; 
+            transform: translate(-50%, -50%); background: #222; 
+            padding: 30px; border: 2px solid var(--main-red); z-index: 1000; 
+            box-shadow: 0 0 100px #000; width: 90%; max-width: 350px; border-radius: 20px;
+        }
+        input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #444; background: #333; color: white; box-sizing: border-box; }
+        .save-btn { width: 100%; padding: 15px; background: var(--main-red); color: white; border: none; cursor: pointer; font-weight: bold; border-radius: 8px; font-size: 16px; }
+
+        /* Адаптивдүүлүк */
+        @media (max-width: 768px) {
+            .comparison { flex-direction: column; }
+            .card { max-width: 260px; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>FACEMASH</h1>
+    <div class="author">@lkamchiev & @anon_oshsu</div>
+</header>
+
+<button class="admin-btn" onclick="askPassword()">+ КЫЗ КОШУУ (ADMIN)</button>
+
+<div class="comparison" id="arena">
+    <h2 id="status">База жүктөлүүдө...</h2>
+</div>
+
+<div id="leaderboard">
+    <h2>TOP 10 RANKING</h2>
+    <ol id="rank-list"></ol>
+</div>
+
+<div class="admin-panel" id="adminBox">
+    <h3 style="margin:0; color:var(--main-red);">Жаңы катышуучу</h3>
+    <input type="text" id="nameInp" placeholder="Аты-жөнү">
+    <p style="font-size:12px; color:gray; text-align:left; margin:10px 0 0 0;">Сүрөттү тандаңыз:</p>
+    <input type="file" id="fileInp" accept="image/*">
+    <button class="save-btn" onclick="saveToFirebase()">БАЗАГА ЖӨНӨТҮҮ</button>
+    <button onclick="document.getElementById('adminBox').style.display='none'" style="background:none; color:gray; border:none; cursor:pointer; margin-top:15px; width:100%;">Жабуу</button>
+</div>
+
+<script>
+    // Сиздин Firebase конфиг
+    const firebaseConfig = {
+        apiKey: "AIzaSyD1lKz7VD5TYH_q1LaI-tRB9_EG4P6chRk",
+        authDomain: "faceamash-oshsu.firebaseapp.com",
+        projectId: "faceamash-oshsu",
+        databaseURL: "https://faceamash-oshsu-default-rtdb.europe-west1.firebasedatabase.app", 
+        storageBucket: "faceamash-oshsu.firebasestorage.app",
+        messagingSenderId: "465909362816",
+        appId: "1:465909362816:web:1cf44900a6fc74458d7665"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // 1. ПАРОЛЬ МЕНЕН КИРҮҮ
+    function askPassword() {
+        let p = prompt("Системалык кодду жазыңыз:");
+        if (p === "oshsu2026") {
+            document.getElementById('adminBox').style.display = 'block';
+        } else if (p !== null) {
+            alert("Код туура эмес!");
+        }
+    }
+
+    // 2. БАЗАГА САКТОО (КЫСЫП ЖҮКТӨЙТ)
+    function saveToFirebase() {
+        const name = document.getElementById('nameInp').value;
+        const file = document.getElementById('fileInp').files[0];
+        if(!name || !file) return alert("Баарын толтуруңуз!");
+
+        const btn = document.querySelector('.save-btn');
+        btn.innerText = "ЖҮКТӨЛҮҮДӨ...";
+        btn.disabled = true;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const img = new Image();
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                canvas.width = 500; canvas.height = 650;
+                canvas.getContext('2d').drawImage(img, 0, 0, 500, 650);
+                const dataURL = canvas.toDataURL('image/jpeg', 0.6);
+                const id = Date.now();
+
+                db.ref('students/' + id).set({
+                    id: id, name: name, photo: dataURL, rank: 1200
+                }).then(() => {
+                    alert("Ийгиликтүү кошулду!");
+                    location.reload();
+                });
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    // 3. ОЮНДУ ЖҮКТӨӨ (СЕКИРБЕЙТ)
+    function loadArena() {
+        db.ref('students').once('value', snap => {
+            const data = snap.val();
+            const arena = document.getElementById('arena');
+            if(!data) { arena.innerHTML = "<h2>База азырынча бош. Кыздарды кошуңуз!</h2>"; return; }
+
+            const arr = Object.values(data);
+            if(arr.length >= 2) {
+                const s = arr.sort(() => 0.5 - Math.random());
+                arena.innerHTML = `
+                    <div class="card" onclick="vote('${s[0].id}','${s[1].id}')"><img src="${s[0].photo}"><h3>${s[0].name}</h3></div>
+                    <div class="vs-text">VS</div>
+                    <div class="card" onclick="vote('${s[1].id}','${s[0].id}')"><img src="${s[1].photo}"><h3>${s[1].name}</h3></div>
+                `;
+            } else {
+                arena.innerHTML = "<h2>Оюн башталышы үчүн кеминде 2 кыз болушу керек.</h2>";
+            }
+        });
+    }
+
+    // 4. РЕЙТИНГДИ ЖАҢЫЛОО (РЕАЛДУУ УБАЙТТА)
+    db.ref('students').on('value', snap => {
+        const data = snap.val();
+        if(!data) return;
+        const list = document.getElementById('rank-list');
+        list.innerHTML = "";
+        const arr = Object.values(data).sort((a,b) => b.rank - a.rank).slice(0, 10);
+        arr.forEach(i => {
+            list.innerHTML += `<li>${i.name} <b>${Math.round(i.rank)}</b></li>`;
+        });
+    });
+
+    // 5. ДОБУШ БЕРҮҮ (ELO СИСТЕМАСЫ)
+    function vote(wId, lId) {
+        const wRef = db.ref('students/' + wId);
+        const lRef = db.ref('students/' + lId);
+        Promise.all([wRef.get(), lRef.get()]).then(res => {
+            const w = res[0].val(), l = res[1].val();
+            const K = 32, Ea = 1/(1+Math.pow(10,(l.rank-w.rank)/400));
+            Promise.all([
+                wRef.update({rank: w.rank + K*(1-Ea)}),
+                lRef.update({rank: l.rank + K*(0-Ea)})
+            ]).then(() => {
+                loadArena(); // Кийинки кыздарды жүктөө
+            });
+        });
+    }
+
+    // Ишке киргизүү
+    loadArena();
+</script>
+</body>
+</html>
